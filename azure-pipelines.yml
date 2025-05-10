@@ -9,7 +9,7 @@ pool:
     name: iti-self-hosted
 
 variables:
-    dockerHubNamespace: 'ahmedhedihed'
+    dockerHubNamespace: 'ibrahimehab'
     dockerRegistryServiceConnection: 'dockerhub-service-conn'
     buildId: $(Build.BuildId)
 
@@ -52,9 +52,9 @@ stages:
         source .venv/bin/activate
         pip install -r src/feedback_backend/requirements.txt
         pip install pytest
-        pytest
+        export PYTHONPATH=src
+        pytest tests/test_app.py
       displayName: 'Run Unit Test'
-      workingDirectory: $(Build.SourcesDirectory)
 
   - job: Build
     dependsOn: [Lint, Test]
@@ -78,7 +78,7 @@ stages:
         containerRegistry: $(dockerRegistryServiceConnection)
         repository: $(dockerHubNamespace)/feedback-frontend
         command: 'buildAndPush'
-        Dockerfile: 'src/feedback_frontend/Dockerfile'
+        Dockerfile: '$(Build.SourcesDirectory)/src/feedback_frontend/src/Dockerfile'
         tags: $(Build.BuildId)
         buildContext: '$(Build.SourcesDirectory)/src/feedback_frontend'
 
@@ -107,14 +107,18 @@ stages:
                 - task: AWSShellScript@1
                   displayName: 'Login to EKS Cluster'
                   inputs:
-                    awsCredentials: 'aws-eks-service-connection'   # replace with your real connection name
+                    awsCredentials: 'aws-eks-service-connection'   
                     regionName: 'us-east-1'
                     scriptType: 'inline'
                     inlineScript: |
                       echo "Logging in to EKS cluster"
                       aws eks update-kubeconfig \
                         --region us-east-1 \
-                        --name eks-stagging-cluster
+                        --name eks-staging-cluster
+
+                - script: |
+                   kubectl get namespace dev || kubectl create namespace dev
+                  displayName: 'Ensure dev namespace exists'
 
                 - script: |
                     kubectl apply -f $(Build.SourcesDirectory)/k8s/ -n ${{ parameters.environment }}
